@@ -7,7 +7,17 @@ import subprocess
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
-# --- FUNCIONES DE LIMPIEZA Y EXTRACCIÓN ---
+# --- INFORMACIÓN DEL DESARROLLADOR ---
+# Basado en tu perfil de Analista de Sistemas
+CREDITOS = """
+----------------------------------------------
+   DESARROLLADO POR: CARLOS JOSÉ CARRANZA V.
+   Analista de Sistemas | Software Developer
+   Contacto: carforck@gmail.com ! +57 3105080356
+   Cartagena de Indias, Colombia
+----------------------------------------------
+"""
+
 def limpiar_monto_colombia(texto):
     if not texto: return 0
     limpio = re.sub(r'[^\d,.]', '', texto).strip()
@@ -48,8 +58,25 @@ def extraer_datos_v2(file_path):
                         res["Proveedor"] = l[:60]
                         break
             
-            fecha_m = re.search(r'(\d{2}[/-]\d{2}[/-]\d{4}|\d{4}[/-]\d{2}[/-]\d{2})', texto_completo)
-            if fecha_m: res["Fecha"] = fecha_m.group(1)
+            # Búsqueda mejorada de fecha por proximidad
+            patron_fecha = r'(\d{2}[/-]\d{2}[/-]\d{4}|\d{4}[/-]\d{2}[/-]\d{2})'
+            keywords_fecha = ["FECHA", "EXPEDICION", "EXPEDICIÓN", "EMISION", "EMISIÓN", "GENERACION", "GENERACIÓN", "FACTURA"]
+            
+            fecha_encontrada = None
+            for idx, linea in enumerate(lineas):
+                l_up = linea.upper()
+                if "FECHA" in l_up and any(k in l_up for k in keywords_fecha):
+                    m = re.search(patron_fecha, linea)
+                    if m:
+                        fecha_encontrada = m.group(1)
+                        break
+                    elif idx + 1 < len(lineas):
+                        m_debajo = re.search(patron_fecha, lineas[idx+1])
+                        if m_debajo:
+                            fecha_encontrada = m_debajo.group(1)
+                            break
+            
+            res["Fecha"] = fecha_encontrada if fecha_encontrada else (re.search(patron_fecha, texto_completo).group(1) if re.search(patron_fecha, texto_completo) else "N/A")
             
             for linea in lineas:
                 l_up = linea.upper()
@@ -63,90 +90,63 @@ def extraer_datos_v2(file_path):
                     if nums: res["Subtotal"] = limpiar_monto_colombia(nums[-1])
             
             if res["Total"] == 0:
-                todos_nums = re.findall(r'[\d\.,]{4,}', texto_completo)
-                candidatos = [limpiar_monto_colombia(n) for n in todos_nums if limpiar_monto_colombia(n) < 50000000]
+                candidatos = [limpiar_monto_colombia(n) for n in re.findall(r'[\d\.,]{4,}', texto_completo) if limpiar_monto_colombia(n) < 50000000]
                 if candidatos: res["Total"] = max(candidatos)
     except Exception as e:
-        print(f"Error procesando {os.path.basename(file_path)}: {e}")
+        print(f"Error en {os.path.basename(file_path)}: {e}")
     return res
 
-# --- CONFIGURACIÓN DE VENTANAS ---
 def seleccionar_origen():
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)
+    root = tk.Tk(); root.withdraw(); root.attributes("-topmost", True)
     folder = filedialog.askdirectory(title="1. Selecciona la carpeta con las Facturas PDF")
-    root.destroy()
-    return folder
+    root.destroy(); return folder
 
 def seleccionar_destino(folder_inicial):
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)
+    root = tk.Tk(); root.withdraw(); root.attributes("-topmost", True)
     nombre_sugerido = f"Reporte_Facturas_{os.path.basename(folder_inicial)}.xlsx"
     file_path = filedialog.asksaveasfilename(
         title="2. ¿Dónde quieres guardar el reporte Excel?",
-        defaultextension=".xlsx",
-        filetypes=[("Excel files", "*.xlsx")],
-        initialfile=nombre_sugerido
+        defaultextension=".xlsx", filetypes=[("Excel files", "*.xlsx")], initialfile=nombre_sugerido
     )
-    root.destroy()
-    return file_path
+    root.destroy(); return file_path
 
-# --- PROCESO PRINCIPAL ---
-print("==============================================")
-print("     EXTRACTOR AUTOMÁTICO DE FACTURAS")
-print("==============================================")
+def ejecutar_proceso():
+    while True:
+        os.system('cls' if os.name == 'nt' else 'clear')
+        print("==============================================")
+        print("     EXTRACTOR AUTOMÁTICO DE FACTURAS")
+        print(CREDITOS)
+        print("==============================================")
 
-origen = seleccionar_origen()
-if not origen:
-    print("❌ Proceso cancelado.")
-    sys.exit()
+        origen = seleccionar_origen()
+        if not origen: break
 
-pdfs = [a for a in os.listdir(origen) if a.lower().endswith('.pdf')]
-if not pdfs:
-    print(f"❌ No hay PDFs en: {origen}")
-    input("Presiona ENTER para salir...")
-    sys.exit()
+        pdfs = [a for a in os.listdir(origen) if a.lower().endswith('.pdf')]
+        if not pdfs:
+            messagebox.showwarning("Atención", f"No hay archivos PDF en la carpeta:\n{origen}")
+            continue
 
-destino = seleccionar_destino(origen)
-if not destino:
-    print("❌ No se seleccionó destino.")
-    sys.exit()
+        destino = seleccionar_destino(origen)
+        if not destino: break
 
-print(f"\n🚀 Iniciando lectura de {len(pdfs)} archivos...")
-print("----------------------------------------------")
+        print(f"\n🚀 Procesando {len(pdfs)} archivos...")
+        resultados = []
+        for i, archivo in enumerate(pdfs, 1):
+            print(f" ► [{i}/{len(pdfs)}] Leyendo: {archivo[:40]}...", end="\r", flush=True)
+            resultados.append(extraer_datos_v2(os.path.join(origen, archivo)))
 
-resultados = []
-for i, archivo in enumerate(pdfs, 1):
-    # El flush=True obliga a la terminal a mostrar el texto de inmediato
-    print(f" ► [{i}/{len(pdfs)}] Leyendo: {archivo[:40]}...", end="\r", flush=True)
-    
-    ruta_completa = os.path.join(origen, archivo)
-    datos = extraer_datos_v2(ruta_completa)
-    resultados.append(datos)
+        try:
+            df = pd.DataFrame(resultados)
+            df.to_excel(destino, index=False)
+            
+            msg = f"Reporte generado con éxito.\nTotal procesado: {len(pdfs)} facturas.\n\n¿Deseas procesar otra carpeta?"
+            if not messagebox.askyesno("Proceso Finalizado", msg):
+                print("\n🙏 Gracias por utilizar la herramienta. ¡Hasta pronto!")
+                messagebox.showinfo("Despedida", "Gracias por utilizar Lector de Facturas PRO.\n\nDesarrollado por Carlos Carranza V.")
+                break
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo guardar el archivo: {e}")
+            if not messagebox.askyesno("Error", "¿Intentar con otra carpeta?"): break
 
-print(f"\n\n✨ ¡Lectura completada!")
-
-# --- GUARDAR EXCEL ---
-try:
-    df = pd.DataFrame(resultados)
-    df.to_excel(destino, index=False)
-    
-    print("----------------------------------------------")
-    print(f"📊 Reporte guardado: {os.path.basename(destino)}")
-    print(f"💰 Suma Total Detectada: ${df['Total'].sum():,.2f}")
-    print("----------------------------------------------")
-    
-    if messagebox.askyesno("Éxito", f"Proceso terminado.\n\n¿Deseas abrir el Excel ahora?"):
-        if sys.platform == "win32":
-            os.startfile(destino)
-        else:
-            subprocess.call(["xdg-open", destino])
-
-except Exception as e:
-    print(f"❌ Error al guardar Excel: {e}")
-    messagebox.showerror("Error", f"No se pudo guardar el archivo Excel:\n{e}")
-
-print("\nPresiona ENTER para finalizar y cerrar esta ventana...")
-input()
+if __name__ == "__main__":
+    ejecutar_proceso()
