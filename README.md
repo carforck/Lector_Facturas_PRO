@@ -51,7 +51,7 @@ La aplicación te guiará paso a paso mediante ventanas emergentes:
 Si tienes dudas o necesitas una personalización adicional del extractor, puedes contactarme:
 
 - **Email:** [carforck@gmail.com](mailto:carforck@gmail.com)
-- **LinkedIn:** [Carlos José Carranza V.](https://www.linkedin.com/in/carranzacarlos/)
+- **LinkedIn:** [Carlos José Carranza V.](https://www.linkedin.com/in/carloscarranzavillera/)
 - **GitHub:** [carforck](https://github.com/carforck)
 
 *"Tecnología con propósito, innovación con impacto."*
